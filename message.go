@@ -1,9 +1,9 @@
 package zserver
 
 import (
+	"encoding/binary"
 	"zarks/zmath"
 	"zarks/zmath/encrypt"
-	"zarks/zmath/zbits"
 )
 
 // Message is a package of information that can be transmitted
@@ -52,14 +52,13 @@ func (msg *StartMessage) GetData() []byte {
 	var (
 		data = make([]byte, LenStart)
 
-		bytesID      = zbits.Uint32ToBytes(msg.id, zbits.LE)
-		bytesType    = zbits.Uint32ToBytes(uint32(msg.Type()), zbits.LE)
-		bytesNameLen = zbits.Uint32ToBytes(uint32(len(msg.filename)), zbits.LE)
+		msgType = uint32(msg.Type())
+		nameLen = uint32(len(msg.filename))
 	)
 
-	copy(data[0:4], bytesID)                // bytes 0-3: the ID of the message
-	copy(data[4:8], bytesType)              // bytes 4-7: the type of the message
-	copy(data[8:12], bytesNameLen)          // bytes 8-11: the length of the filename
+	PutUint32(msg.id, data, posID)          // bytes 0-3: the ID of the message
+	PutUint32(msgType, data, posType)       // bytes 4-7: the type of the message
+	PutUint32(nameLen, data, posNameLen)    // bytes 8-11: the length of the filename
 	copy(data[LenStart-128:], msg.filename) // the last 128 bytes: the filename
 
 	return data
@@ -73,8 +72,8 @@ func (msg *StartMessage) GetData() []byte {
 type DataMessage struct {
 	id       uint32
 	number   uint32
-	filedata []byte
 	valid    uint32 // how many bytes of the filedata are actual data (leave as 0 for full messages)
+	filedata []byte
 }
 
 // NewDataMessage returns a Message for transferring file data
@@ -99,16 +98,13 @@ func (msg *DataMessage) GetData() []byte {
 	var (
 		data = make([]byte, LenPartHeader+LenPartData)
 
-		bytesID     = zbits.Uint32ToBytes(msg.id, zbits.LE)
-		bytesType   = zbits.Uint32ToBytes(uint32(msg.Type()), zbits.LE)
-		bytesNumber = zbits.Uint32ToBytes(msg.number, zbits.LE)
-		bytesValid  = zbits.Uint32ToBytes(uint32(msg.valid), zbits.LE)
+		msgType = uint32(msg.Type())
 	)
 
-	copy(data[0:4], bytesID)      // bytes 0-3: the ID of the message
-	copy(data[4:8], bytesType)    // bytes 4-7: the type of the message
-	copy(data[8:12], bytesNumber) // bytes 8-11: the order of the message for files > 16KB (most files)
-	copy(data[12:16], bytesValid) // bytes 12-15: how many bytes of the filedata are to be used
+	PutUint32(msg.id, data, posID)       // bytes 0-3: the ID of the message
+	PutUint32(msgType, data, posType)    // bytes 4-7: the type of the message
+	PutUint32(msg.number, data, posNum)  // bytes 8-11: the order of the message for files > 16KB (most files)
+	PutUint32(msg.valid, data, posValid) // bytes 12-15: how many bytes of the filedata are to be used
 
 	copy(data[LenPartHeader:], msg.filedata) // last [LenDataPart] bytes: the actual filedata
 
@@ -141,12 +137,45 @@ func (msg *EndMessage) GetData() []byte {
 	var (
 		data = make([]byte, LenEnd)
 
-		bytesID   = zbits.Uint32ToBytes(msg.id, zbits.LE)
-		bytesType = zbits.Uint32ToBytes(uint32(msg.Type()), zbits.LE)
+		msgType = uint32(msg.Type())
 	)
 
-	copy(data[0:4], bytesID)   // bytes 0-3: the ID of the message
-	copy(data[4:8], bytesType) // bytes 4-7: the type of the message
+	PutUint32(msg.id, data, posID)    // bytes 0-3: the ID of the message
+	PutUint32(msgType, data, posType) // bytes 4-7: the type of the message
 
 	return data
+}
+
+//                   //
+// - - - BYTES - - - //
+//                   //
+
+// ReadUint16 reads a uint16 from some data at the target location
+func ReadUint16(data []byte, at int) uint16 {
+	return binary.LittleEndian.Uint16(data[at : at+2])
+}
+
+// ReadUint32 reads a uint32 from some data at the target location
+func ReadUint32(data []byte, at int) uint32 {
+	return binary.LittleEndian.Uint32(data[at : at+4])
+}
+
+// ReadUint64 reads a uint64 from some data at the target location
+func ReadUint64(data []byte, at int) uint64 {
+	return binary.LittleEndian.Uint64(data[at : at+8])
+}
+
+// PutUint16 writes a uint16 to some data at the target location
+func PutUint16(num uint16, data []byte, at int) {
+	binary.LittleEndian.PutUint16(data[at:at+2], num)
+}
+
+// PutUint32 writes a uint16 to some data at the target location
+func PutUint32(num uint32, data []byte, at int) {
+	binary.LittleEndian.PutUint32(data[at:at+4], num)
+}
+
+// PutUint64 writes a uint16 to some data at the target location
+func PutUint64(num uint64, data []byte, at int) {
+	binary.LittleEndian.PutUint64(data[at:at+8], num)
 }

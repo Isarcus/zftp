@@ -1,7 +1,6 @@
 package zserver
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
@@ -95,7 +94,9 @@ func (b *Buffer) SendData(ip string) {
 
 		// Encrypt and write to TCP connection
 		bytesWritten, err := conn.Write(Encrypt(msg, b.aes))
-		fmt.Println("Bytes written:", bytesWritten)
+		if PrintConfirmation {
+			fmt.Println("Bytes written:", bytesWritten)
+		}
 		if err != nil {
 			fmt.Println("[SEND ERROR]", err)
 		}
@@ -128,7 +129,10 @@ func (b *Buffer) ReceiveData(ip string) {
 			fmt.Println(err)
 		}
 
-		fmt.Println("Bytes received: ", n)
+		if PrintConfirmation {
+			fmt.Println("Bytes received: ", n)
+		}
+
 		b.ProcessData(msg)
 
 		_, err = net.Dial("tcp", checkIP) // ready for next loop
@@ -145,22 +149,22 @@ func (b *Buffer) ProcessData(data []byte) {
 	hdr = encrypt.Decrypt(b.aes, hdr)
 
 	var (
-		id      = binary.LittleEndian.Uint32(hdr[0:4])
-		msgType = binary.LittleEndian.Uint32(hdr[4:8])
+		id      = ReadUint32(hdr, 0)
+		msgType = ReadUint32(hdr, 4)
 	)
 
 	switch MessageType(msgType) {
 	case TypeData:
 		msg := &DataMessage{
 			id:       id,
-			number:   binary.LittleEndian.Uint32(hdr[8:12]),
-			valid:    binary.LittleEndian.Uint32(hdr[12:16]),
+			number:   ReadUint32(hdr, 8),
+			valid:    ReadUint32(hdr, 12),
 			filedata: data[LenPartHeader:],
 		}
 		b.messages = append(b.messages, msg)
 		return
 	case TypeStart:
-		lenName := binary.LittleEndian.Uint32(hdr[8:12])
+		lenName := ReadUint32(hdr, 8)
 		title := string(hdr[LenPartHeader-128 : LenPartHeader-128+lenName])
 
 		msg := NewStartMessage(id, title)
@@ -204,6 +208,9 @@ func (b *Buffer) Write(stem string) {
 		if msg.Type() == TypeData {
 			data := msg.GetData()
 			valid := msg.(*DataMessage).valid
+			if valid == 0 {
+				valid = LenPartData
+			}
 			f.Write(data[LenPartHeader : LenPartHeader+valid])
 		}
 	}

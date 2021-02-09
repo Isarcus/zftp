@@ -37,6 +37,17 @@ const (
 	LenPartData = 16 * KB
 )
 
+// position constants in the header
+const (
+	posID              = 0
+	posType            = 4
+	posNum, posNameLen = 8, 8
+	posValid           = 12
+)
+
+// PrintConfirmation tells whether to print that each byte package has been sent (annoying and slow for large files)
+var PrintConfirmation = false
+
 /*
 HEADER STRUCTURE:
 
